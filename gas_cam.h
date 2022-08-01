@@ -5,27 +5,20 @@
 #define SNAPSHOT_HEIGHT 240
 #define SNAPSHOT_WIDTH 360
 #define MAX_TEMP 30
-#include "queue.h"
+#include "Queue.h"
 #include <pthread.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
 #ifdef __cplusplus
+
 extern "C" {
 #endif
-
-char rgb_arr[MAX_TEMP][60]={
-    "255 000 087\n",    "000 090 000\n" ,"255 087 000\n"
-    ,"255 000 098\n" ,"255 100 056\n" , "255 000 200\n"
-    "255 000 000\n",    "210 000 255\n",    "080 009 255\n",
-    "255 111 111\n" ,"255 000 212\n" ,"255 111 000\n"
-    ,"255 056 000\n" ,"255 000 111\n" , "010 000 000\n"
-    "122 233 000\n",    "177 000 255\n",    "080 090 255\n",
-    "000 255 000\n" ,"255 000 111\n" ,"255 000 222\n"
-    ,"255 000 000\n" ,"255 000 222\n" ,"255 000 121\n"
-    ,"100 000 255\n" ,"255 000 121\n" ,"255 200 230\n"
-     ,"060 200 200\n" ,"255 200 056\n" ,"255 000 088\n"
-};
+typedef struct yuv{
+    char y[SNAPSHOT_HEIGHT*SNAPSHOT_WIDTH];
+    char u[SNAPSHOT_HEIGHT*SNAPSHOT_WIDTH/4];
+    char v[SNAPSHOT_HEIGHT*SNAPSHOT_WIDTH/4];
+}YUV;
 typedef struct stage{
 
     void* (*func)(void*);
@@ -79,8 +72,10 @@ typedef struct ppm_image{
     char * name;
 } ppm_image;
 typedef struct {
+
     void* (*init)();
     void (*free_all)(void* handle);
+    int (*signal_handler_interrupt)(handler * handler);
     int (*start_record)(void* handler);
     int (*stop_record)(void* handler);
     int (*start_streaming)(streaming_t*,char * file_name);
@@ -97,3 +92,10 @@ typedef struct {
 #endif
 
 #endif // GAS_CAM_H
+
+
+
+
+
+
+

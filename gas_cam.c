@@ -1,4 +1,4 @@
-#include "gaz_cam.h"
+#include "gas_cam.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -26,9 +26,28 @@ void covert_to_rgb(handler * handle,char rgb_matrix[],int** matrix){//[SNAPSHOT_
             rgb_matrix[k++]=handle->static_mat_rgb[t];
             rgb_matrix[k++]=handle->static_mat_rgb[t+1];
             rgb_matrix[k++]=handle->static_mat_rgb[t+2];
-            printf("%d rr %s\n",matrix[i][j],rgb_arr[matrix[i][j]]);
             //strcat(rgb_matrix,rgb_arr[matrix[i][j]]);
         }
+}
+void convert_to_yuv(char rgb_matrix[],  YUV *yuv){
+    char R,G,B;
+    //int i=0,j=0;
+    for(int i=0;i<SNAPSHOT_HEIGHT;i++)
+            {
+                for(int j=0;j<SNAPSHOT_WIDTH;j++)
+                {
+                    R=*(rgb_matrix+i*SNAPSHOT_WIDTH*3+j*3);
+                    G=*(rgb_matrix+i*SNAPSHOT_WIDTH*3+j*3+1);
+                    B=*(rgb_matrix+i*SNAPSHOT_WIDTH*3+j*3+2);
+                    yuv->y[SNAPSHOT_WIDTH*i+j]= (0.257 * R) + (0.504 * G) + (0.098 * B) + 16+'0';
+                    if(i%2==0&&j%2==0)
+                    {
+                        yuv->u[(SNAPSHOT_WIDTH*i+j)/4]= (0.439 * R) - (0.368 * G) - (0.071 * B) + 128+'0';
+                        yuv->v[(SNAPSHOT_WIDTH*i+j)/4]= -(0.148 * R) - (0.291 * G) + (0.439 * B) + 128+'0';
+                    }
+                }
+            }
+
 }
 void copy_matrix(int matrix[SNAPSHOT_HEIGHT][SNAPSHOT_WIDTH],void* data){
     int** data_matrix=(int**)(data);
@@ -54,10 +73,13 @@ void free_matrix(int** m){
         free(m[i]);
         m[i]=NULL;
     }
-
+    m=NULL;
 }
 void free_rgb_matrix(char * m){
+  //  free(*m);
+    //*m=NULL;
     free(m);
+    m=NULL;
 }
 size_t ppm_save(ppm_image *img) {
     printf("save ppm\n %d",img->width);
@@ -86,7 +108,7 @@ void* capture(void* handle){
     printf("-----capture\n-----");
     handler * my_handler=(handler*)handle;
     stage my_stage=my_handler->stages[0];
-    Node * n;
+    Node*n;
     my_stage.isActive=1;
     int i=0,** matrix=NULL;//[SNAPSHOT_HEIGHT][SNAPSHOT_WIDTH]={27};
     do{
@@ -97,21 +119,25 @@ void* capture(void* handle){
         }
         randMat(matrix);
         n=createNode(matrix, sizeof(int));
-        enqueu(my_stage.destQu,n);
         printf("capture %d\n",((int**)(n->data))[0][0]);
+
+        enqueu(my_stage.destQu,n);
         sleep(3);
         i++;
     }while(my_handler->is_record_on);
+    sleep(3);
+    my_handler->stages[1].isActive=0;
 }
 void* rgb_converter(void* handle){
     printf("-----rgb_converter\n-----");
     handler * my_handler=(handler*)handle;
     stage my_stage=my_handler->stages[1];
+    char *rgb_matrix=NULL;
 
     Node*n;
     my_stage.isActive=1;
     while(1){
-        char *rgb_matrix;
+
         rgb_matrix=(char *)malloc(sizeof(char)*(SNAPSHOT_HEIGHT*SNAPSHOT_WIDTH*3));
         *rgb_matrix=0;
         n=dequeue(my_stage.sourseQu);
@@ -132,6 +158,8 @@ void* rgb_converter(void* handle){
         enqueu(my_stage.destQu,n);
         sleep(3);
     }
+     my_handler->stages[2].isActive=0;
+
 }
 void* yuv_converter(void* handle){
     printf("-----yuv_converter\n-----");
@@ -140,14 +168,22 @@ void* yuv_converter(void* handle){
     Node*n;
     my_stage.isActive=1;
     //    int* rgb_matrix[SNAPSHOT_HEIGHT][SNAPSHOT_WIDTH];
-    while(1){
+    while(my_stage.isActive){
         n=dequeue(my_stage.sourseQu);
+        YUV * yuv=(YUV*)malloc(sizeof(YUV));
+
+        convert_to_yuv((char*)n->data,yuv);
+        char * c=(char*)(n->data);
+        free_rgb_matrix(c);
+         freeNode(n);
+         n=createNode(yuv,sizeof(YUV*));
         //       copy_rgb_matrix(rgb_matrix,n->data);
         printf("yuv \n");
         enqueu(my_stage.destQu,n);
         //  free(n);
         sleep(3);
     }
+     my_handler->stages[3].isActive=0;
 }
 void* encode(void* handle){
     printf("-----cencode\n-----");
@@ -156,13 +192,16 @@ void* encode(void* handle){
     stage my_stage=my_handler->stages[3];
     Node*n;
     my_stage.isActive=1;
-    while(1){
+    while(my_stage.isActive){
         n=dequeue(my_stage.sourseQu);
+        char *mat=((YUV*)n->data)->y;
+        printf("cc %c\n",mat[0]);
         printf("encode\n");
         enqueu(my_stage.destQu,n);
         //   free(n);
         sleep(3);
     }
+    my_handler->stages[4].isActive=0;
 }
 
 void* write_record(void*handle){
@@ -172,13 +211,15 @@ void* write_record(void*handle){
     Node*n;
     my_stage.isActive=1;
 
-    while(1){
+    while(my_stage.isActive){
         n=dequeue(my_stage.sourseQu);
-        printf("write \n");
-        free_rgb_matrix((int***)(n->data));
-        freeNode(n);
+        printf("writecc \n");
+        char * c=(char*)(n->data);
+//        free_rgb_matrix(&(c));
+//        freeNode(n);
         sleep(3);
     }
+
 }
 
 void* GAS_API_init(){
@@ -234,7 +275,7 @@ void GAS_API_free_all(void* handle){
 
 }
 int GAS_API_start_record(void* handle){
-    printf ("====start_record====\n");
+    printf ("====start_record!====\n");
     handler* my_handler=(handler*)(handle);
     my_handler->is_record_on=1;
     for(int i=0;i<STAGES_NUMBER;i++){
@@ -247,9 +288,14 @@ int GAS_API_stop_record(void* handle){
 
     printf ("====stop_record====\n\r");
     handler* my_handler=(handler*)(handle);
+
     for(int i=0;i<STAGES_NUMBER;i++){
         pthread_join(my_handler->stages[i].thread,NULL);
     }
+    my_handler->is_record_on=0;
+//    for(int i=0;i<STAGES_NUMBER;i++){
+//      my_handler->stages[i].isActive=0;
+//    }
     return 0;
 }
 int GAS_API_start_streaming(streaming_t* stream,char * file_name){
@@ -290,10 +336,19 @@ char* GAS_API_get_status(){
     printf("GAZ_API_get_status");
     return NULL;
 }
+int GAS_API_signal_handler_interrupt(handler * handle){
+    printf("GAZ_API_sig_handler");
+    if(handle->is_record_on)
+       {
+        GAS_API_stop_record(handle);
+         handle->is_record_on=0;
+        }
+}
 
 gazapi_t p_gaz_api= {
     .init=GAS_API_init,
     .free_all=GAS_API_free_all,
+    .signal_handler_interrupt=GAS_API_signal_handler_interrupt,
     .start_record=GAS_API_start_record,
     .stop_record=GAS_API_stop_record,
     .start_streaming=GAS_API_start_streaming,
@@ -303,5 +358,3 @@ gazapi_t p_gaz_api= {
     .get_video_statics=GAS_API_get_video_statics,
     .get_status=GAS_API_get_status
 };
-
-

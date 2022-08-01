@@ -1,4 +1,4 @@
-#include "queue.h"
+#include "Queue.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -9,6 +9,7 @@ Node * createNode(void * data, int size){
     Node* node=(Node*)malloc(sizeof(Node));
     //node->data=malloc(size);
     node->data=data;
+    node->next=NULL;
     //memcpy(node->data,data,size);
     //  exit(1);
     return node;
@@ -25,14 +26,21 @@ void initQueue(Queue* q,int capacity){
     q->head=NULL;
     q->tail=NULL;
     sem_init(&(q->mutex),0,1);//to do sync
-    sem_init(&(q->is_full_mutex),0,0);//to check if there is place
+    sem_init(&(q->is_full_mutex),0,capacity);//to check if there is place
+    while(capacity)
+    {
+        sem_wait(&(q->is_full_mutex));
+        capacity--;
+    }
     return;
 }
 void freeNode(Node* node){
     if(node==NULL)
         return;
-    free(node->data);
-    node->data=0;
+//    if(node->data!=N)
+//    {free(node->data);
+//    node->data=0;
+//    }
     free(node);
     node=0;
 }
@@ -40,6 +48,7 @@ void freeQueue(Queue* q){
     if(q==NULL)
         return;
     sem_destroy(&q->mutex);
+    sem_destroy(&q->is_full_mutex);
     while(!isEmpty(q)){
         freeNode(dequeue(q));
     }
@@ -66,7 +75,6 @@ void enqueu(Queue* q,Node* data){
         q->tail=data;
     }
     q->size++;
-
     sem_post(&q->mutex);//free sem
     sem_post(&q->is_full_mutex);
 
@@ -92,4 +100,3 @@ int isFull(Queue *q){
     sem_post(&q->mutex);//free sem
     return isFull;
 }
-
